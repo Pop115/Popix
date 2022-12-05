@@ -1,0 +1,127 @@
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px;
+    background-color: white;
+    border: 1px solid black;
+    display: visible;
+    z-index: 1000;
+    background-color: rgba(230, 230, 230, 0.7);
+    border-radius: 10px;
+}
+
+.modal *{
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+
+}
+
+.main-page{
+    filter: blur(5px); /* Blur the page content */
+}
+
+/* Set the page to use a flexbox layout */
+.rows-wrapper {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    height: 30vw;
+}
+
+.main-col,
+.chat-col {
+    display: flex;
+    flex-direction: column;
+}
+
+.main-col {
+    margin: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.main-col * {
+    text-align: center;
+    margin: 0 auto;
+    text-align: center;
+}
+
+#player-list {
+    height: 100%;
+    width: 200px;
+}
+
+#player-list .player-div{
+    border: solid #444;
+    border-radius: 10px;
+    padding: 10px;
+    margin: 10px;
+}
+
+#player-list .player-div .player-name{
+    font-weight: bold;
+}
+#player-list .player-div .player-points{
+    font-weight: bold;
+    float: right;
+}
+#player-list .player-div .player-message{
+    width: 100%;
+    display: block;
+}
+
+
+
+.center-image {
+    display: block;
+    margin: 0 auto;
+}
+
+.input-container {
+    margin-top: 20px;
+}
+
+.input-container input {
+    display: block;
+    margin: 0 auto;
+    width: 200px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+}
+
+.names-list {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    display: inline-block;
+    text-align: right;
+}
+
+/* Use a material design font and color for the names */
+.names-list li {
+    font-family: "Roboto", sans-serif;
+    font-size: 16px;
+    color: #3f51b5;
+}
+
+/* Use media queries to make the page responsive */
+@media (max-width: 600px) {
+
+    /* Stack the image, input text, and names list vertically on small screens */
+    .page-wrapper {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* Adjust the width of the input text and names list on small screens */
+    .center-input,
+    .names-list {
+        width: 100%;
+    }
+}

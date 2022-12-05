@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Popix admin</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+
+<body>
+    <div id="mainPage" class="rowsWrapper">
+        <div class="mainCol">
+
+            <h1>ADMIN</h1>
+
+            <div id="newQuestion" class="adminDiv">
+                <h3>Generate new question</h3>
+                <form id="formQuestion">
+                    <input type="file" id="image">
+                    <input type="text" id="myText1" placeholder="Answer">
+                    <input type="text" id="myText2" placeholder="Prompt">
+                    <button type="submitQuestion">Submit</button>
+                </form>
+            </div>
+
+            <div id="generateBase64" class="adminDiv">
+                <h3>Generate base64</h3>
+                <form id="form64">
+                    <input type="text" id="directoryInput" placeholder="Directory">
+                    <input type="text" id="questionName" placeholder="Question name">
+                    <button type="submitBase64">Submit</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socketio/socket.io.js"></script>
+    <script src="admin.js"></script>
+</body>
+
+</html>

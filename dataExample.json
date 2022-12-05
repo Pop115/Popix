@@ -1,0 +1,24 @@
+[
+    {
+        "name": "sansundertale",
+        "prompt": "Sans from Undertale",
+        "answers": [
+            {
+                "word": "Sans",
+                "value": 100
+            },
+            {
+                "word": "Undertale",
+                "value": 20
+            },
+            {
+                "word": "Deltarune",
+                "value": 10
+            },
+            {
+                "word": "Skeleton",
+                "value": 5
+            }
+        ]
+    }
+]

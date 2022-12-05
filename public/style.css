@@ -19,12 +19,12 @@
 
 }
 
-.main-page{
+.mainPage{
     filter: blur(5px); /* Blur the page content */
 }
 
 /* Set the page to use a flexbox layout */
-.rows-wrapper {
+.rowsWrapper {
     display: flex;
     flex-direction: row;
     justify-content: center;
@@ -32,61 +32,60 @@
     height: 30vw;
 }
 
-.main-col,
-.chat-col {
+.mainCol, .chatCol {
     display: flex;
     flex-direction: column;
 }
 
-.main-col {
+.mainCol {
     margin: auto;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
-.main-col * {
+.mainCol * {
     text-align: center;
     margin: 0 auto;
     text-align: center;
 }
 
-#player-list {
+#playerList {
     height: 100%;
     width: 200px;
 }
 
-#player-list .player-div{
+#playerList .playerDiv{
     border: solid #444;
     border-radius: 10px;
     padding: 10px;
     margin: 10px;
 }
 
-#player-list .player-div .player-name{
+#playerList .playerDiv .playerName{
     font-weight: bold;
 }
-#player-list .player-div .player-points{
+#playerList .playerDiv .playerPoints{
     font-weight: bold;
     float: right;
 }
-#player-list .player-div .player-message{
+#playerList .playerDiv .playerMessage{
     width: 100%;
     display: block;
 }
 
 
 
-.center-image {
+.centerImage {
     display: block;
     margin: 0 auto;
 }
 
-.input-container {
+.inputContainer {
     margin-top: 20px;
 }
 
-.input-container input {
+.inputContainer input {
     display: block;
     margin: 0 auto;
     width: 200px;
@@ -95,7 +94,7 @@
     border-radius: 10px;
 }
 
-.names-list {
+.namesList {
     padding: 0;
     margin: 0;
     list-style: none;
@@ -104,7 +103,7 @@
 }
 
 /* Use a material design font and color for the names */
-.names-list li {
+.namesList li {
     font-family: "Roboto", sans-serif;
     font-size: 16px;
     color: #3f51b5;
@@ -114,14 +113,13 @@
 @media (max-width: 600px) {
 
     /* Stack the image, input text, and names list vertically on small screens */
-    .page-wrapper {
+    .pageWrapper {
         flex-direction: column;
         align-items: center;
     }
 
     /* Adjust the width of the input text and names list on small screens */
-    .center-input,
-    .names-list {
+    .centerInput, .namesList {
         width: 100%;
     }
 }

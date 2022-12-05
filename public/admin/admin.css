@@ -1,0 +1,11 @@
+.adminDiv{
+    padding: 10px;
+    border: solid 1px black;
+    border-radius: 10px;
+    margin: 30px;
+    width: 50vw;
+}
+
+#generateBase64 input{
+    width: 40vw;
+}

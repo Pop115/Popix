@@ -5,12 +5,21 @@ const server = http.createServer(app);
 const { Server } = require("socket.io");
 const io = new Server(server);
 
+const roundSpeed = 3000;
+
+//Players, points and last message
+//Ex:
+var playersList = [
+]
+
+var currentQuestion;
+var currentImages;
+var currentImageIndex = 0;
+var isRoundFinished = false;
+var roundNb = 1;
+
 app.use(express.static('public/'));
 app.use('/socketio', express.static('node_modules/socket.io/client-dist/'));
-
-app.get('/', (req, res) => {
-  res.send('Hello, world!');
-});
 
 app.get('/admin', (req, res) => {
   res.sendFile('admin/admin.html', { root: "public/" });
@@ -24,39 +33,150 @@ server.listen(3000, () => {
 io.on('connection', socket => {
   console.log('A user connected');
 
-  socket.on("set-pseudo", (pseudo) => {
+  for (const player of playersList) {
+    socket.emit("addPlayer", { "pseudo": player.pseudo, "points": player.points, "message": player.message });
+  }
+
+  socket.on("setPseudo", (pseudo) => {
+    var newPlayer = { "pseudo": pseudo, "points": 0, "message": "", "socketId": socket.id };
+    playersList.push(newPlayer)
     console.log("User connected and set its pseudo to " + pseudo);
-    io.emit("add-player", pseudo)
+    io.emit("addPlayer", newPlayer)
   });
 
-  socket.on('message', message => {
-    console.log(`Received message: ${message}`);
-    io.emit('message', message);
+  socket.on('message', (playerPseudo, message) => {
+    console.log(`Received message "${message}" from "${playerPseudo}"`);
+    io.emit('message', playerPseudo, message);
   });
 
   socket.on('disconnect', () => {
     console.log('A user disconnected');
+    var disconnectedPlayer = playersList.filter(player => player.socketId === socket.id)[0];
+    playersList = playersList.filter(player => player.socketId !== socket.id);
+    io.emit("removePlayer", disconnectedPlayer)
+  });
+
+
+  socket.on("newQuestion", (newQuestion) => {
+    addNewQuestion(newQuestion);
   });
 
   socket.on("generate64", (questionName, directoryPath) => {
-    convertPicturesFromDirectory(questionName, directoryPath);
+    //convertPicturesFromDirectory(questionName, directoryPath);
   });
 });
 
-async function loadImagesByTag(tag) {
-  // Connect to the database
-  const client = await MongoClient.connect(mongoUrl, { useNewUrlParser: true });
-  const db = client.db(dbName);
 
-  // Find all images with the specified tag
-  const images = await db.collection('images').find({ tags: tag }).toArray();
-
-  // Close the database connection
-  client.close();
-
-  // Return the list of images
-  return images;
+async function startNewQuestion() {
+  console.log("New question started");
+  isRoundFinished = false;
+  currentQuestion = await retrieveRandomQuestion();
+  currentImages = await retrieveImagesWithName(currentQuestion.name);
+  currentImageIndex = 0;
+  console.log(`Question chosen is ${JSON.stringify(currentQuestion)} and has ${currentImages.length} images`);
+  io.emit("newRound", {
+    "nbImages": currentImages.length,
+    "roundNb": roundNb
+  });
+  io.emit("newImage", {
+    "image": currentImages[0],
+    "imageIndex": 0
+  });
+  loopRound();
 }
+
+async function loopRound() {
+  await timer(roundSpeed);
+  sendNextImage();
+}
+
+function sendNextImage() {
+  currentImageIndex += 1;
+  console.log(`Next image, image ${currentImageIndex} / ${currentImages.length}`);
+  if (currentImageIndex >= currentImages.length) {
+    finishCurrentQuestion();
+  } else {
+    io.emit("newImage", {
+      "image": currentImages[currentImageIndex],
+      "imageIndex": currentImageIndex
+    });
+    loopRound();
+  }
+}
+
+async function finishCurrentQuestion() {
+  isRoundFinished = true;
+  io.emit("questionResult", currentQuestion);
+  await timer(10000);
+  startNewQuestion();
+}
+
+async function addNewQuestion(newQuestion) {
+  const name = newQuestion.answer.split(" ").join("_")
+
+  const question = {
+    "name": name,
+    "prompt": newQuestion.prompt,
+    "answer": newQuestion.answer
+  }
+  insertObjectIntoDB("questions", question);
+
+  const images = {
+    "name": name,
+    "images": newQuestion.images
+  }
+  insertObjectIntoDB("images", images);
+}
+
+
+//DATABASE stuff
+const MongoClient = require('mongodb').MongoClient;
+const dbClient = new MongoClient('mongodb://127.0.0.1:27017', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+const dbName = 'popix';
+
+dbClient.connect(async (err) => {
+  if (err) {
+    console.error(err);
+    return;
+  }
+  console.log('Connected to MongoDB server');
+  await startNewQuestion();
+});
+
+async function insertObjectIntoDB(collection, object) {
+  console.log("Inserting object " + JSON.stringify(object) + " into collection " + collection)
+  const selectedCollection = dbClient.db(dbName).collection(collection);
+  const result = await selectedCollection.insertOne(object);
+}
+
+async function retrieveRandomQuestion() {
+  const questionsColl = dbClient.db(dbName).collection("questions");
+  return await questionsColl.aggregate([{ $sample: { size: 1 } }]).next();
+}
+
+async function retrieveImagesWithName(name) {
+  const imagesColl = dbClient.db(dbName).collection("images");
+  var result = await imagesColl.findOne({ "name": name });
+  return result.images;
+}
+
+//Utilities
+
+//ES7 way to wait
+//await timer(3000)
+const timer = ms => new Promise(res => setTimeout(res, ms))
+
+
+
+
+
+
+
+
+
 
 
 
@@ -94,9 +214,6 @@ function convertPicturesFromDirectory(name, directory) {
       "base64": base64
     }
 
-    console.log(name);
-    console.log(index);
-
     insertObjectIntoDB("images", picObj);
     index = index - step;
 
@@ -112,66 +229,3 @@ function convertPicturesFromDirectory(name, directory) {
   console.log("Finished conversion, result is in images.json")
   //console.log(json);
 }
-
-
-/*
-const multer = require('multer');
-const upload = multer({ dest: 'uploads/' });
-.
-async function uploadImages(req, res) {
-  // Get the list of uploaded images
-  const images = req.files;
-
-  // Get the tag for the images from the request body
-  const tag = req.body.tag;
-
-  // Connect to the database
-  const client = await MongoClient.connect(mongoUrl, { useNewUrlParser: true });
-  const db = client.db(dbName);
-
-  // Insert the images into the database
-  for (const image of images) {
-    await db.collection('images').insertOne({
-      data: image.buffer,
-      contentType: image.mimetype,
-      tags: [tag]
-    });
-  }
-
-  // Close the database connection
-  client.close();
-
-  // Send a response to the client
-  res.send('Images uploaded successfully');
-}
-*/
-
-
-
-
-const MongoClient = require('mongodb').MongoClient;
-
-
-const dbClient = new MongoClient('mongodb://127.0.0.1:27017', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
-const dbName = 'popix';
-
-dbClient.connect((err) => {
-  if (err) {
-    console.error(err);
-    return;
-  }
-
-  console.log('Connected to MongoDB server');
-});
-
-async function insertObjectIntoDB(collection, object) {
-  console.log("Inserting object " + object + " into collection " + collection)
-  const db = dbClient.db(dbName).collection(collection);
-  const result = await db.insertOne(object);
-
-}
-
-

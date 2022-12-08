@@ -1,0 +1,1 @@
+docker run -d --name popixmongo -p 27017:27017 mongo

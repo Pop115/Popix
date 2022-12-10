@@ -1,14 +1,29 @@
+const jsonBigInt = require("json-bigint");
 const express = require('express');
 const app = express();
 const http = require('http');
 const server = http.createServer(app);
 const { Server } = require("socket.io");
-const io = new Server(server);
+const io = new Server(server, {
+  maxHttpBufferSize: 1e8 // 100 MB
+});
 
-const roundSpeed = 3000;
+const stableServer = {
+  hostname: '127.0.0.1',
+  port: 7860,
+  path: '/sdapi/v1/img2img',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+};
+
+const roundSpeed = 2000;
 
 //Players, points and last message
-//Ex:
+/*Player model
+ { "pseudo": pseudo, "points": 0, "message": "", "socketId": socket.id }
+*/
 var playersList = [
 ]
 
@@ -46,7 +61,11 @@ io.on('connection', socket => {
 
   socket.on('message', (playerPseudo, message) => {
     console.log(`Received message "${message}" from "${playerPseudo}"`);
-    io.emit('message', playerPseudo, message);
+    if (message.toLowerCase() == prompt.toLowerCase()) {
+      playerWinRound(socket);
+    } else {
+      io.emit('message', playerPseudo, message);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -60,17 +79,22 @@ io.on('connection', socket => {
   socket.on("newQuestion", (newQuestion) => {
     addNewQuestion(newQuestion);
   });
-
-  socket.on("generate64", (questionName, directoryPath) => {
-    //convertPicturesFromDirectory(questionName, directoryPath);
-  });
 });
 
+function playerWinRound(socket) {
+  for (let i = 0; i < playersList.length; i++) {
+    if (playersList[i].socketId = socket.id) {
+      playersList[i].points += 5;//TODO give points based on remaining time
+      socket.emit("winRound", playersList);
+    }
+  }
+}
 
 async function startNewQuestion() {
   console.log("New question started");
   isRoundFinished = false;
   currentQuestion = await retrieveRandomQuestion();
+  if (currentQuestion == null) return;
   currentImages = await retrieveImagesWithName(currentQuestion.name);
   currentImageIndex = 0;
   console.log(`Question chosen is ${JSON.stringify(currentQuestion)} and has ${currentImages.length} images`);
@@ -111,7 +135,8 @@ async function finishCurrentQuestion() {
   startNewQuestion();
 }
 
-async function addNewQuestion(newQuestion) {
+function addNewQuestion(newQuestion) {
+  console.log("New question received from admin page, prompt is " + newQuestion.prompt + ", answer is " + newQuestion.answer);
   const name = newQuestion.answer.split(" ").join("_")
 
   const question = {
@@ -119,14 +144,84 @@ async function addNewQuestion(newQuestion) {
     "prompt": newQuestion.prompt,
     "answer": newQuestion.answer
   }
-  insertObjectIntoDB("questions", question);
-
-  const images = {
-    "name": name,
-    "images": newQuestion.images
-  }
-  insertObjectIntoDB("images", images);
+  //insertObjectIntoDB("questions", question);
+  generateStableImages(newQuestion.prompt, newQuestion.image);
+  // const images = {
+  //   "name": name,
+  //   "images": newQuestion.images
+  // }
+  // insertObjectIntoDB("images", images);
 }
+
+
+function generateStableImages(prompt, base64Image) {
+  var base64regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
+  //base64Image = base64Image.replace("data:image/png;base64,", "");
+  //base64Image = base64Image.trim();
+
+  var payload = {
+    "init_images":[base64Image],
+    "resize_mode": 0,
+    "denoising_strength": 0.75,
+    "mask_blur": 4,
+    "inpainting_fill": 0,
+    "inpaint_full_res": true,
+    "inpaint_full_res_padding": 0,
+    "inpainting_mask_invert": 0,
+    "prompt" : "hello",
+    "styles": [
+
+    ],
+    "seed": -1,
+    "subseed": -1,
+    "subseed_strength": 0,
+    "seed_resize_from_h": -1,
+    "seed_resize_from_w": -1,
+    "sampler_name": "Euler a",
+    "batch_size": 1,
+    "n_iter": 1,
+    "steps": 20,
+    "cfg_scale": 7,
+    "width": 64,
+    "height": 64,
+    "restore_faces": false,
+    "tiling": false,
+    "negative_prompt": "",
+    "eta": 0,
+    "s_churn": 0,
+    "s_tmax": 0,
+    "s_tmin": 0,
+    "s_noise": 1,
+    "override_settings": {},
+    "sampler_index": "0",
+    "include_init_images": false
+  }
+
+  const req = http.request(stableServer, (res) => {
+    console.log("Response from sdapi");
+    res.on("data", (data) => {
+      var jsonString = Buffer.from(data).toString();
+      //jsonString = jsonString.replace(/\\/g, "");
+      //jsonString = jsonString.replaceAll("\"", "'");
+      const jsonObject = JSON.parse(jsonString);
+      console.log(jsonObject.images.length);
+    });
+  });
+
+
+  req.on('error', (error) => {
+    // handle any error that occurs while making the request
+    console.error("sdapi return error");
+    console.error(error);
+  });
+
+  req.write(JSON.stringify(payload));
+  req.end();
+}
+
+
+
+
 
 
 //DATABASE stuff
@@ -147,7 +242,7 @@ dbClient.connect(async (err) => {
 });
 
 async function insertObjectIntoDB(collection, object) {
-  console.log("Inserting object " + JSON.stringify(object) + " into collection " + collection)
+  //console.log("Inserting object " + JSON.stringify(object) + " into collection " + collection)
   const selectedCollection = dbClient.db(dbName).collection(collection);
   const result = await selectedCollection.insertOne(object);
 }
@@ -160,7 +255,11 @@ async function retrieveRandomQuestion() {
 async function retrieveImagesWithName(name) {
   const imagesColl = dbClient.db(dbName).collection("images");
   var result = await imagesColl.findOne({ "name": name });
-  return result.images;
+  if (result != null) {
+    return result.images;
+  } else {
+    return [];
+  }
 }
 
 //Utilities
@@ -183,6 +282,7 @@ const timer = ms => new Promise(res => setTimeout(res, ms))
 // Import the 'fs' and 'path' modules
 const fs = require('fs');
 const path = require('path');
+const { NONAME } = require('dns');
 
 function convertPicturesFromDirectory(name, directory) {
   console.log("Converting images of folder " + directory + " into JSON containing base64 images");

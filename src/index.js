@@ -94,11 +94,11 @@ io.on('connection', socket => {
   });
 });
 
-function playerWinRound(socket) {
+function playerWinRound(winningSocket) {
   for (let i = 0; i < playersList.length; i++) {
-    if (playersList[i].socketId = socket.id) {
+    if (playersList[i].socketId == winningSocket.id) {
       playersList[i].points += 5;//TODO give points based on remaining time
-      socket.emit("winRound", playersList);
+      io.emit("winRound", playersList);
       finishCurrentQuestion(playersList[i].pseudo);
       return;
     }

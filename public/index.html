@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>My Node.js Project</title>
+  <title>Popix</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
   <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
   <!-- Include the custom CSS file for styling -->
@@ -23,13 +23,15 @@
 
       <div id="roundInfo">
         <p>Round <span id="roundNumber">1</span></p>
-        <p>Temps restant : <span id="timeLeft">10</span></p>
+        <!-- <p>Temps restant : <span id="timeLeft">10</span></p> -->
         <p>Image <span id="imageIndex">10</span>/<span id="nbImages"></span></p>
-        <p id="roundAnswerP">La réponse était <span id="roundAnswer"></span></p>
+        <p id="roundWinnerP"><span id="roundWinner"></span> a trouvé en premier</p>
+        <p id="roundAnswerP">La réponse était "<span id="roundAnswer"></span>"</p>
+        <p id="promptUsedP">prompt: <span id="promptUsed"></span></p>
       </div>
 
       <div class="imageContainer">
-        <img id="imageToFind" src="giphy.gif" alt="Image" class="centerImage">
+        <img id="imageToFind" src="" alt="Image" class="centerImage">
       </div>
 
       <div class="inputContainer">

@@ -74,13 +74,21 @@
     display: block;
 }
 
-#roundAnswerP{
+#roundAnswerP, #promptUsedP, #roundWinnerP{
     display: none;
 }
 
 .centerImage {
     display: block;
     margin: 0 auto;
+}
+
+#imageToFind{
+    height: 20vw;
+}
+
+#imageToFind.success{
+    border: greenyellow 5px solid;
 }
 
 .inputContainer {

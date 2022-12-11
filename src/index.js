@@ -8,13 +8,16 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e8 // 100 MB
 });
 
+//Queue for new questions added from admin ui
+questionsQueue = [];
+
 const stableServer = {
   hostname: '127.0.0.1',
   port: 7860,
   path: '/sdapi/v1/img2img',
   method: 'POST',
   headers: {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json'
   },
 };
 
@@ -28,10 +31,10 @@ var playersList = [
 ]
 
 var currentQuestion;
-var currentImages;
 var currentImageIndex = 0;
 var isRoundFinished = false;
-var roundNb = 1;
+var roundNb = 0;
+var isGeneratingPicture = false;
 
 app.use(express.static('public/'));
 app.use('/socketio', express.static('node_modules/socket.io/client-dist/'));
@@ -48,8 +51,17 @@ server.listen(3000, () => {
 io.on('connection', socket => {
   console.log('A user connected');
 
+  //Send list of already connected users to the new user
   for (const player of playersList) {
     socket.emit("addPlayer", { "pseudo": player.pseudo, "points": player.points, "message": player.message });
+  }
+
+  //Send round info
+  if (currentQuestion != null) {
+    socket.emit("newRound", {
+      "nbImages": currentQuestion.noiseValues.length,
+      "roundNb": roundNb
+    });
   }
 
   socket.on("setPseudo", (pseudo) => {
@@ -61,7 +73,8 @@ io.on('connection', socket => {
 
   socket.on('message', (playerPseudo, message) => {
     console.log(`Received message "${message}" from "${playerPseudo}"`);
-    if (message.toLowerCase() == prompt.toLowerCase()) {
+    if (message.toLowerCase() == currentQuestion.answer.toLowerCase()) {
+      console.log("Player found the answer!");
       playerWinRound(socket);
     } else {
       io.emit('message', playerPseudo, message);
@@ -86,25 +99,37 @@ function playerWinRound(socket) {
     if (playersList[i].socketId = socket.id) {
       playersList[i].points += 5;//TODO give points based on remaining time
       socket.emit("winRound", playersList);
+      finishCurrentQuestion(playersList[i].pseudo);
+      return;
     }
   }
+}
+
+function sendLog(log) {
+  console.log("Sending log to client", log);
+  io.emit("adminLog", {
+    "logMessage": log
+  });
 }
 
 async function startNewQuestion() {
   console.log("New question started");
   isRoundFinished = false;
+  roundNb += 1;
   currentQuestion = await retrieveRandomQuestion();
   if (currentQuestion == null) return;
-  currentImages = await retrieveImagesWithName(currentQuestion.name);
-  currentImageIndex = 0;
-  console.log(`Question chosen is ${JSON.stringify(currentQuestion)} and has ${currentImages.length} images`);
+  //currentImages = await retrieveImagesWithName(currentQuestion.name);
+  currentImageIndex = currentQuestion.noiseValues.length - 1;
+  console.log(`Question chosen is ${JSON.stringify(currentQuestion)} and has ${currentQuestion.noiseValues.length} images`);
   io.emit("newRound", {
-    "nbImages": currentImages.length,
+    "nbImages": currentQuestion.noiseValues.length,
     "roundNb": roundNb
   });
-  io.emit("newImage", {
-    "image": currentImages[0],
-    "imageIndex": 0
+  retrieveQuestionImageFromDB(currentQuestion.name, currentQuestion.noiseValues[currentImageIndex]).then(downloadedImage => {
+    io.emit("newImage", {
+      "image": downloadedImage,
+      "imageIndex": 0
+    });
   });
   loopRound();
 }
@@ -115,78 +140,84 @@ async function loopRound() {
 }
 
 function sendNextImage() {
-  currentImageIndex += 1;
-  console.log(`Next image, image ${currentImageIndex} / ${currentImages.length}`);
-  if (currentImageIndex >= currentImages.length) {
+  currentImageIndex -= 1;
+  //console.log(`Next image, image ${currentImageIndex} / ${currentQuestion.noiseValues.length}`);
+  if (currentImageIndex <= 0 || isRoundFinished) {
     finishCurrentQuestion();
   } else {
-    io.emit("newImage", {
-      "image": currentImages[currentImageIndex],
-      "imageIndex": currentImageIndex
+    retrieveQuestionImageFromDB(currentQuestion.name, currentQuestion.noiseValues[currentImageIndex]).then(downloadedImage => {
+      io.emit("newImage", {
+        "image": downloadedImage,
+        "imageIndex": currentImageIndex
+      });
     });
+
+    retrieveQuestionImageFromDB(currentQuestion.name, currentQuestion.noiseValues[currentImageIndex]);
     loopRound();
   }
 }
 
-async function finishCurrentQuestion() {
-  isRoundFinished = true;
-  io.emit("questionResult", currentQuestion);
-  await timer(10000);
-  startNewQuestion();
+async function finishCurrentQuestion(winnerPseudo) {
+  if (isRoundFinished == false) {
+    isRoundFinished = true;
+    io.emit("questionResult", currentQuestion, winnerPseudo);
+    await timer(10000);
+    startNewQuestion();
+  }
 }
 
 function addNewQuestion(newQuestion) {
   console.log("New question received from admin page, prompt is " + newQuestion.prompt + ", answer is " + newQuestion.answer);
-  const name = newQuestion.answer.split(" ").join("_")
+  if (!isGeneratingPicture) {
+    var noiseValues = [];
+    noiseValues.push(0.0);
+    for (var denoise = 0.3; denoise <= 0.99; denoise = parseFloat((denoise + 0.02).toFixed(2))) {
+      noiseValues.push(denoise);
+    }
 
-  const question = {
-    "name": name,
-    "prompt": newQuestion.prompt,
-    "answer": newQuestion.answer
+    isGeneratingPicture = true;
+    const name = newQuestion.answer.trim().split(" ").join("_");
+    newQuestion.answer = newQuestion.answer.trim().toLowerCase();
+    newQuestion.prompt = newQuestion.prompt.trim().toLowerCase();
+    const question = {
+      "name": name,
+      "prompt": newQuestion.prompt,
+      "answer": newQuestion.answer,
+      "active": false,
+      "noiseValues": noiseValues
+    }
+    insertObjectIntoDB("questions", question);
+    generateStableImages(name, newQuestion, noiseValues);
+  } else {
+    questionsQueue.push(newQuestion);
+    sendLog("Already busy with generation, added to queue, queue length is " + questionsQueue.length);
   }
-  //insertObjectIntoDB("questions", question);
-  generateStableImages(newQuestion.prompt, newQuestion.image);
-  // const images = {
-  //   "name": name,
-  //   "images": newQuestion.images
-  // }
-  // insertObjectIntoDB("images", images);
 }
 
-
-function generateStableImages(prompt, base64Image) {
-  var base64regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
-  //base64Image = base64Image.replace("data:image/png;base64,", "");
-  //base64Image = base64Image.trim();
+async function generateStableImages(name, newQuestion, noiseValues) {
+  sendLog("Starting generation of images");
+  let seed = '';
+  for (let i = 0; i < 10; i++) {
+    seed += Math.floor(Math.random() * 10);
+  }
 
   var payload = {
-    "init_images":[base64Image],
-    "resize_mode": 0,
-    "denoising_strength": 0.75,
-    "mask_blur": 4,
-    "inpainting_fill": 0,
-    "inpaint_full_res": true,
-    "inpaint_full_res_padding": 0,
-    "inpainting_mask_invert": 0,
-    "prompt" : "hello",
-    "styles": [
-
-    ],
-    "seed": -1,
+    "init_images": [newQuestion.image],
+    "denoising_strength": 0.0,
     "subseed": -1,
-    "subseed_strength": 0,
-    "seed_resize_from_h": -1,
-    "seed_resize_from_w": -1,
+    "subseed_strength": 0.05,
+    "prompt": newQuestion.prompt,
+    "seed": -1,
     "sampler_name": "Euler a",
     "batch_size": 1,
     "n_iter": 1,
-    "steps": 20,
+    "steps": 10,
     "cfg_scale": 7,
-    "width": 64,
-    "height": 64,
+    "width": 512,
+    "height": 512,
     "restore_faces": false,
     "tiling": false,
-    "negative_prompt": "",
+    "negative_prompt": "nsfw, naked, nude, nipples, deformed, cropped, blurry, merged",
     "eta": 0,
     "s_churn": 0,
     "s_tmax": 0,
@@ -197,35 +228,54 @@ function generateStableImages(prompt, base64Image) {
     "include_init_images": false
   }
 
-  const req = http.request(stableServer, (res) => {
-    console.log("Response from sdapi");
-    res.on("data", (data) => {
-      var jsonString = Buffer.from(data).toString();
-      //jsonString = jsonString.replace(/\\/g, "");
-      //jsonString = jsonString.replaceAll("\"", "'");
-      const jsonObject = JSON.parse(jsonString);
-      console.log(jsonObject.images.length);
+  for (let i in noiseValues) {
+    denoise = noiseValues[i];
+    var payloadNoise = payload;
+    payloadNoise.denoising_strength = denoise;
+
+    const denoisePromise = new Promise((resolve, reject) => {
+
+      const req = http.request(stableServer, (res) => {
+        var data = [];
+        res.on('data', function (chunk) {
+          data.push(chunk);
+        }).on("end", () => {
+          var jsonString = Buffer.concat(data).toString();
+          const jsonObject = JSON.parse(jsonString);
+          //addImageToExistingQuestion(name, "data:image/png;base64," + jsonObject.images[0], denoise);
+          insertQuestionImageIntoDB(name, denoise, jsonObject.images[0]);
+          sendLog("Generated image with denoise: " + denoise);
+          resolve();
+        });
+      });
+      req.on('error', (error) => {
+        // handle any error that occurs while making the request
+        sendLog("sdapi return error");
+        console.error(error);
+        reject(error);
+      });
+      req.write(JSON.stringify(payloadNoise));
+      req.end();
     });
-  });
-
-
-  req.on('error', (error) => {
-    // handle any error that occurs while making the request
-    console.error("sdapi return error");
-    console.error(error);
-  });
-
-  req.write(JSON.stringify(payload));
-  req.end();
+    await denoisePromise;
+    if (parseFloat((denoise + 0.02).toFixed(2)) >= 0.99) {
+      sendLog("Generation finished");
+      enableQuestion(name);
+      isGeneratingPicture = false;
+      if (questionsQueue.length > 0) {
+        sendLog(questionsQueue.length + " questions pending in queue, proceeding to next generation");
+        addNewQuestion(questionsQueue.shift());
+      } else {
+        sendLog("Queue empty");
+      }
+    }
+  }
 }
 
 
-
-
-
-
 //DATABASE stuff
-const MongoClient = require('mongodb').MongoClient;
+mongodb = require('mongodb');
+const MongoClient = mongodb.MongoClient;
 const dbClient = new MongoClient('mongodb://127.0.0.1:27017', {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -242,14 +292,117 @@ dbClient.connect(async (err) => {
 });
 
 async function insertObjectIntoDB(collection, object) {
-  //console.log("Inserting object " + JSON.stringify(object) + " into collection " + collection)
+  //console.log("Inserting object " + JSON.stringify(object) + " into collection " + collection);
   const selectedCollection = dbClient.db(dbName).collection(collection);
   const result = await selectedCollection.insertOne(object);
+  console.log("Inserted object into collection " + collection)
+}
+
+async function insertQuestionImageIntoDB(name, noise, base64Image) {
+  const bucket = new mongodb.GridFSBucket(dbClient.db(dbName), { bucketName: "imagesBucket" });
+
+  const imageBuffer = new Buffer.from(base64Image, "base64");
+  bucket.openUploadStream(name, {
+    metadata: {
+      noise: noise
+    }
+  }).
+    on('error', (error) => {
+      console.log('Error occurred while uploading image', error);
+    }).
+    on('finish', (file) => {
+      //console.log('Image uploaded successfully', file);
+      //client.close();
+    }).
+    end(imageBuffer);
+
+  //const bucket = new mongodb.GridFSBucket(dbClient.db(dbName), { bucketName: "imagesBucket" });
+  //bucket.openUploadStream({ "filename": name, "metadata": { "noise": noise } }).end(imageBuffer);
+}
+
+function retrieveQuestionImageFromDB(name, noise) {
+  return new Promise((resolve, reject) => {
+    const bucket = new mongodb.GridFSBucket(dbClient.db(dbName), { bucketName: "imagesBucket" });
+    bucket.find({
+      filename: name,
+      'metadata.noise': noise
+    }).toArray((error, files) => {
+      if (error) {
+        console.log('Error occurred while retrieving image', error);
+        reject(error);
+      } else if (files.length > 0) {
+        //v2 download all images here?
+        const file = files[0];
+        const downloadStream = bucket.openDownloadStream(file._id);
+        let imageData = [];
+        downloadStream.on('data', (chunk) => {
+          imageData.push(chunk);
+        });
+        downloadStream.on('error', (error) => {
+          console.log('Error occurred while downloading image', error);
+          reject(error);
+        });
+        downloadStream.on('end', () => {
+          const downloadedImage = "data:image/png;base64," +Buffer.concat(imageData).toString("base64");
+          resolve(downloadedImage);
+        });
+      } else {
+        console.log('Image not found');
+        reject(new Error('Image not found'));
+      }
+    });
+  });
+}
+
+
+
+
+// const image = await dbClient.db(dbName).collection("imagesBucket.files").findOne(query);
+// const downloadStream = bucket.openDownloadStream(image._id);
+// //const downloadStream = bucket.openDownloadStreamByName(name, { "noise": noise });
+// let imageData = '';
+// downloadStream.on('data', (chunk) => {
+//   imageData += chunk;
+// });
+// downloadStream.on('end', () => {
+//   let base64Image = Buffer.from(imageData, 'binary').toString('base64');
+//   //base64Image = base64Image.replace("/", "");
+//   base64Image = "data:image/png;base64,"+base64Image;
+
+//   console.log({
+//     "image": base64Image,
+//     "imageIndex": currentImageIndex
+//   });
+//   io.emit('newImage', {
+//     "image": base64Image,
+//     "imageIndex": currentImageIndex
+//   });
+// });
+
+async function addImageToExistingQuestion(name, base64Image, index) {
+  const selectedCollection = dbClient.db(dbName).collection("images");
+  const result = await selectedCollection.updateOne(
+    { name: name },
+    { $push: { images: base64Image } }
+  );
+  console.log("Added image " + index + " to existing question " + name);
+}
+
+async function enableQuestion(name) {
+  const selectedCollection = dbClient.db(dbName).collection("questions");
+  const result = await selectedCollection.updateOne(
+    { name: name },
+    { $set: { "active": true } }
+  );
+  console.log("Enabled question " + name);
 }
 
 async function retrieveRandomQuestion() {
   const questionsColl = dbClient.db(dbName).collection("questions");
-  return await questionsColl.aggregate([{ $sample: { size: 1 } }]).next();
+  return await questionsColl.aggregate([
+    { $match: { active: true } },
+    { $sample: { size: 1 } }
+  ]).next();
 }
 
 async function retrieveImagesWithName(name) {
@@ -263,69 +416,5 @@ async function retrieveImagesWithName(name) {
 }
 
 //Utilities
-
-//ES7 way to wait
 //await timer(3000)
 const timer = ms => new Promise(res => setTimeout(res, ms))
-
-
-
-
-
-
-
-
-
-
-
-
-// Import the 'fs' and 'path' modules
-const fs = require('fs');
-const path = require('path');
-const { NONAME } = require('dns');
-
-function convertPicturesFromDirectory(name, directory) {
-  console.log("Converting images of folder " + directory + " into JSON containing base64 images");
-
-  // Get a list of all files in the directory
-  const files = fs.readdirSync(directory);
-
-  // Create an empty array to store the base64-encoded images
-  const images = [];
-
-  var index = files.length;
-  const step = 1;
-  // Loop through the files in the directory
-  for (const file of files) {
-    // Get the path to the file
-    const filePath = path.join(directory, file);
-
-    // Read the file as a binary buffer
-    const buffer = fs.readFileSync(filePath);
-
-    console.log("Converting " + filePath);
-
-    // Convert the buffer to a base64-encoded string
-    const base64 = buffer.toString('base64');
-
-    const picObj = {
-      "name": name,
-      "index": index,
-      "base64": base64
-    }
-
-    insertObjectIntoDB("images", picObj);
-    index = index - step;
-
-    // Add the base64-encoded image to the array
-    //images.push(base64);
-  }
-
-  // Convert the array of images to a JSON string
-  //const json = JSON.stringify(images);
-
-  // Save the JSON string to a file
-  //fs.writeFileSync('images.json', json);
-  console.log("Finished conversion, result is in images.json")
-  //console.log(json);
-}

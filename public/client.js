@@ -7,6 +7,21 @@ blurElement("mainPage");
 const pseudoForm = document.getElementById("pseudoForm");
 const pseudoModal = document.getElementById("pseudoModal");
 const pseudoInput = document.getElementById("pseudoInput");
+
+const nbImages = document.getElementById("nbImages");
+const roundAnswerP = document.getElementById("roundAnswerP");
+const roundAnswer = document.getElementById("roundAnswer");
+const promptUsedP = document.getElementById("promptUsedP");
+const promptUsed = document.getElementById("promptUsed");
+const roundWinnerP = document.getElementById("roundWinnerP");
+const roundWinner = document.getElementById("roundWinner");
+const roundNumber = document.getElementById("roundNumber");
+
+const imageToFind = document.getElementById("imageToFind");
+const imageIndex = document.getElementById("imageIndex");
+
+const promptInput = document.getElementById('promptInput');
+
 pseudoForm.addEventListener('submit', (event) => {
     event.preventDefault();
     pseudoModal.style.display = "none";
@@ -15,15 +30,20 @@ pseudoForm.addEventListener('submit', (event) => {
     unblurElement("mainPage");
 });
 
-
-//Send message when pressing Enter on promptInput
-const promptInput = document.getElementById('promptInput');
 promptInput.addEventListener('keydown', event => {
     if (event.key === "Enter") {
         const message = promptInput.value;
         socket.emit('message', playerPseudo, message);
         promptInput.value = '';
     }
+});
+
+socket.on("winRound", (playersList) => {
+    for (let i = 0; i < playersList.length; i++) {
+        var playerDiv = document.getElementById(playersList[i].pseudo);
+        playerDiv.getElementsByClassName("playerPoints")[0].innerHTML = playersList[i].points;
+    }
+    imageToFind.classList.add("success");
 });
 
 // Handle incoming messages
@@ -41,26 +61,32 @@ socket.on("removePlayer", player => {
     removePlayer(player);
 });
 
-const imageToFind = document.getElementById("imageToFind");
-const imageIndex = document.getElementById("imageIndex");
+
 socket.on("newImage", newImageInfo => {
     imageToFind.src = newImageInfo.image;
     imageIndex.innerHTML = newImageInfo.imageIndex;
 });
 
-const nbImages = document.getElementById("nbImages");
-const roundAnswerP = document.getElementById("roundAnswerP");
-const roundAnswer = document.getElementById("roundAnswer");
+
 socket.on("newRound", (roundInfo) => {
-    console.log("New round");
+    roundNumber.innerHTML = roundInfo.roundNb;
     nbImages.innerHTML = roundInfo.nbImages;
-    roundAnswerP.display = "none";
+    roundAnswerP.style.display = "none";
     roundAnswer.innerHTML = "";
+    promptUsedP.style.display = "none";
+    promptUsed.innerHTML = "";
+    roundWinnerP.style.display = "none";
+    roundWinner.innerHTML = "";
+    imageToFind.classList.remove("success");
 });
 
-socket.on("questionResult", question => {
-    roundAnswerP.display = "block";
+socket.on("questionResult", (question, winnerPseudo) => {
+    roundAnswerP.style.display = "block";
     roundAnswer.innerHTML = question.answer;
+    promptUsedP.style.display = "block";
+    promptUsed.innerHTML = question.prompt;
+    roundWinnerP.style.display = "block";
+    roundWinner.innerHTML = winnerPseudo;
 });
 
 function addPlayer(name, points, message) {

@@ -8,8 +8,6 @@ const text1Input = document.getElementById('myText1');
 const text2Input = document.getElementById('myText2');
 const confirmation = document.getElementById('confirmation');
 
-var base64regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
-
 formQuestion.addEventListener('submit', (event) => {
     event.preventDefault();
 
@@ -22,9 +20,6 @@ formQuestion.addEventListener('submit', (event) => {
     reader.readAsDataURL(image);
     reader.onload = () => {
         var base64Image = reader.result;
-        //base64Image = base64Image.split(",")[1]
-        //const paddedBase64String = base64Image.padEnd(base64Image.length + (4 - base64Image.length % 4) % 4, '=');
-
         console.log("New question sent, prompt is "+prompt+", answer is "+answer);
         socket.emit('newQuestion', {
             "image": base64Image,
@@ -34,6 +29,25 @@ formQuestion.addEventListener('submit', (event) => {
     };
 
 
+});
+
+const cleanLogs = document.getElementById("cleanLogs");
+const logsDiv = document.getElementById("logsDiv");
+
+cleanLogs.addEventListener("click", (event) => {
+    event.preventDefault();
+    logsDiv.innerHTML = "";
+});
+
+function addLog(log){
+    var newLog = document.createElement("p");
+    newLog.innerHTML = log.logMessage;
+    logsDiv.appendChild(newLog);
+}
+
+
+socket.on("adminLog", log => {
+    addLog(log);
 });
 
 // Listen for the form's submit event

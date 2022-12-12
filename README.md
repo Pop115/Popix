@@ -15,40 +15,52 @@ cd popix
 npm install
 ```
 
-3. Start the game
+3. Start MongoDB on port 27017 (only supporting locally)
+
+4. Start the game
 ```
 node src/index.js
 ```
 
-4. Open the game in your web browser at `http://localhost:3000`
+5. (Optional) Launch stable-diffusion-webui if you want to generate new images
+```
+git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui
+cd stable-diffusion-webui
+./webui-user.bat
+```
+
+6. Open the game in your web browser at `http://localhost:3000`
 
 ## How to play the game
 
 1. Open the game in your web browser at `http://localhost:3000`
 
-2. Enter your name and click "Play"
+2. Enter your name and click "Ok"
 
-3. Wait for the game to start
-
-4. When a question is displayed, type your answer in the text box and press enter
+4. When an image is displayed, type your answer in the text box and press enter
 
 5. If your answer is correct, you will earn points and a new round will start
 
-6. The game continues until all the questions have been answered
+6. The images will progressively be closer to the original image until there are no more images left
+
+7. The rounds continue indefinitely
 
 ## How to add new questions
 
 1. Open the game in your web browser at `http://localhost:3000/admin`
 
-2. Type your question and answer in the text boxes and click "Add"
+2. Submit a picture, the prompt that will be used for stable-diffusion to generate the modified pictures and the answer to win the round
 
-3. The new question will be added to the game and will be displayed in the next round
+3. The images will be generated (can take a few minutes) and once all images are generated the question will be available on the game
+
+4. If another generation is already running, your question will be added to the queue and will be processed automatically after
 
 ## Technologies used
 
 - NodeJS
 - Express
 - Socket.io
+- MongoDB
 - html, css, javascript
 
 ## Contributing

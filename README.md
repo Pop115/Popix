@@ -1,6 +1,6 @@
 # Popix (NodeJS image quiz game)
 
-This is a simple quiz game written in NodeJS. It uses a websocket to communicate between the server and the client. The game displays an image modified by an AI and the players have to guess the answer to earn points.
+This is a simple quiz game written in NodeJS. It uses socket.io to communicate between the server and the client. The game displays an image modified by an AI and the players have to guess the answer to earn points.
 
 ## How to run the game
 

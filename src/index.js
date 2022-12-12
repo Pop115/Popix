@@ -11,6 +11,9 @@ const io = new Server(server, {
 //Queue for new questions added from admin ui
 questionsQueue = [];
 
+//Queue of next questions for the game
+randomQuestionsQueue = [];
+
 const stableServer = {
   hostname: '127.0.0.1',
   port: 7860,
@@ -116,7 +119,11 @@ async function startNewQuestion() {
   console.log("New question started");
   isRoundFinished = false;
   roundNb += 1;
-  currentQuestion = await retrieveRandomQuestion();
+  //currentQuestion = await retrieveRandomQuestion();
+  if (randomQuestionsQueue.length <= 0) {
+    await generateRandomQuestionsQueue();
+  }
+  currentQuestion = randomQuestionsQueue.shift();
   if (currentQuestion == null) return;
   currentImageIndex = currentQuestion.noiseValues.length - 1;
   console.log(`Question chosen is ${JSON.stringify(currentQuestion)} and has ${currentQuestion.noiseValues.length} images`);
@@ -169,7 +176,7 @@ function addNewQuestion(newQuestion) {
   console.log("New question received from admin page, prompt is " + newQuestion.prompt + ", answer is " + newQuestion.answer);
   if (!isGeneratingPicture) {
     var noiseValues = [];
-    noiseValues.push(0.0);
+    noiseValues.push(0);
     for (var denoise = 0.3; denoise <= 0.99; denoise = parseFloat((denoise + 0.02).toFixed(2))) {
       noiseValues.push(denoise);
     }
@@ -203,8 +210,6 @@ async function generateStableImages(name, newQuestion, noiseValues) {
   var payload = {
     "init_images": [newQuestion.image],
     "denoising_strength": 0.0,
-    "subseed": -1,
-    "subseed_strength": 0.05,
     "prompt": newQuestion.prompt,
     "seed": -1,
     "sampler_name": "Euler a",
@@ -286,7 +291,8 @@ dbClient.connect(async (err) => {
     return;
   }
   console.log('Connected to MongoDB server');
-  await startNewQuestion();
+  generateRandomQuestionsQueue();
+  await startNewQuestion(); //START THE GAME
 });
 
 async function insertObjectIntoDB(collection, object) {
@@ -338,7 +344,7 @@ function retrieveQuestionImageFromDB(name, noise) {
           reject(error);
         });
         downloadStream.on('end', () => {
-          const downloadedImage = "data:image/png;base64," +Buffer.concat(imageData).toString("base64");
+          const downloadedImage = "data:image/png;base64," + Buffer.concat(imageData).toString("base64");
           resolve(downloadedImage);
         });
       } else {
@@ -366,16 +372,18 @@ async function retrieveRandomQuestion() {
   ]).next();
 }
 
-async function retrieveImagesWithName(name) {
-  const imagesColl = dbClient.db(dbName).collection("images");
-  var result = await imagesColl.findOne({ "name": name });
-  if (result != null) {
-    return result.images;
-  } else {
-    return [];
-  }
+async function generateRandomQuestionsQueue() {
+  const questionsColl = dbClient.db(dbName).collection("questions");
+  const questions = await questionsColl.aggregate([
+    { $match: { active: true } }  ]).toArray();
+  randomQuestionsQueue = randomizeArray(questions);
+  console.log("Generated random questions queue, size: "+randomQuestionsQueue.length);
 }
 
 //Utilities
 //await timer(3000)
 const timer = ms => new Promise(res => setTimeout(res, ms))
+
+function randomizeArray(arr) {
+  return arr.sort(() => Math.random() - 0.5);
+}

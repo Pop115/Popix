@@ -118,7 +118,6 @@ async function startNewQuestion() {
   roundNb += 1;
   currentQuestion = await retrieveRandomQuestion();
   if (currentQuestion == null) return;
-  //currentImages = await retrieveImagesWithName(currentQuestion.name);
   currentImageIndex = currentQuestion.noiseValues.length - 1;
   console.log(`Question chosen is ${JSON.stringify(currentQuestion)} and has ${currentQuestion.noiseValues.length} images`);
   io.emit("newRound", {
@@ -242,7 +241,6 @@ async function generateStableImages(name, newQuestion, noiseValues) {
         }).on("end", () => {
           var jsonString = Buffer.concat(data).toString();
           const jsonObject = JSON.parse(jsonString);
-          //addImageToExistingQuestion(name, "data:image/png;base64," + jsonObject.images[0], denoise);
           insertQuestionImageIntoDB(name, denoise, jsonObject.images[0]);
           sendLog("Generated image with denoise: " + denoise);
           resolve();
@@ -315,9 +313,6 @@ async function insertQuestionImageIntoDB(name, noise, base64Image) {
       //client.close();
     }).
     end(imageBuffer);
-
-  //const bucket = new mongodb.GridFSBucket(dbClient.db(dbName), { bucketName: "imagesBucket" });
-  //bucket.openUploadStream({ "filename": name, "metadata": { "noise": noise } }).end(imageBuffer);
 }
 
 function retrieveQuestionImageFromDB(name, noise) {
@@ -352,40 +347,6 @@ function retrieveQuestionImageFromDB(name, noise) {
       }
     });
   });
-}
-
-
-
-
-// const image = await dbClient.db(dbName).collection("imagesBucket.files").findOne(query);
-// const downloadStream = bucket.openDownloadStream(image._id);
-// //const downloadStream = bucket.openDownloadStreamByName(name, { "noise": noise });
-// let imageData = '';
-// downloadStream.on('data', (chunk) => {
-//   imageData += chunk;
-// });
-// downloadStream.on('end', () => {
-//   let base64Image = Buffer.from(imageData, 'binary').toString('base64');
-//   //base64Image = base64Image.replace("/", "");
-//   base64Image = "data:image/png;base64,"+base64Image;
-
-//   console.log({
-//     "image": base64Image,
-//     "imageIndex": currentImageIndex
-//   });
-//   io.emit('newImage', {
-//     "image": base64Image,
-//     "imageIndex": currentImageIndex
-//   });
-// });
-
-async function addImageToExistingQuestion(name, base64Image, index) {
-  const selectedCollection = dbClient.db(dbName).collection("images");
-  const result = await selectedCollection.updateOne(
-    { name: name },
-    { $push: { images: base64Image } }
-  );
-  console.log("Added image " + index + " to existing question " + name);
 }
 
 async function enableQuestion(name) {

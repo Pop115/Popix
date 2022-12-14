@@ -61,7 +61,8 @@ cd stable-diffusion-webui
 - Express
 - Socket.io
 - MongoDB
-- html, css, javascript
+- HTML, CSS, Javascript
+- Stable diffusion web ui (https://github.com/AUTOMATIC1111/stable-diffusion-webui)
 
 ## Contributing
 

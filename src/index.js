@@ -1,4 +1,5 @@
 const jsonBigInt = require("json-bigint");
+const propertiesReader = require('properties-reader');
 const express = require('express');
 const app = express();
 const http = require('http');
@@ -13,6 +14,8 @@ questionsQueue = [];
 
 //Queue of next questions for the game
 randomQuestionsQueue = [];
+
+const secretProperties = propertiesReader("./config/secret.properties");
 
 const stableServer = {
   hostname: '127.0.0.1',
@@ -43,6 +46,23 @@ app.use(express.static('public/'));
 app.use('/socketio', express.static('node_modules/socket.io/client-dist/'));
 
 app.get('/admin', (req, res) => {
+  const reject = () => {
+    res.setHeader("www-authenticate", "Basic");
+    res.sendStatus(401);
+  };
+  const authorization = req.headers.authorization;
+  if (!authorization) {
+    return reject();
+  }
+  const [username, password] = Buffer.from(
+    authorization.replace("Basic ", ""),
+    "base64"
+  ).toString().split(":");
+  const secretUsername = secretProperties.get("username");
+  const secretPassword = secretProperties.get("password");
+  if (!(username === secretUsername && password === secretPassword)) {
+    return reject();
+  }
   res.sendFile('admin/admin.html', { root: "public/" });
 });
 
